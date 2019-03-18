@@ -12,6 +12,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from datetime import datetime
+
 import argparse
 import time
 
@@ -61,13 +63,13 @@ def _data_generator(x, y, num_features, batch_size):
 def batch_train_sequence_model(data,
                                learning_rate=1e-3,
                                epochs=1000,
-                               batch_size=128,
+                               batch_size=128, # Was 128 in original Google code
                                blocks=2,
                                filters=64,
                                dropout_rate=0.2,
                                embedding_dim=200,
                                kernel_size=3,
-                               pool_size=3):
+                               pool_size=1): # Was 3 in original Google code
     """Trains sequence model on the given dataset.
 
     # Arguments
@@ -99,6 +101,8 @@ def batch_train_sequence_model(data,
                          'as training labels.'.format(
                              unexpected_labels=unexpected_labels))
 
+    print('len(train_texts)', len(train_texts))
+    print('train_texts[0]', train_texts[0])
     # Vectorize texts.
     x_train, x_val, word_index = vectorize_data.sequence_vectorize(
             train_texts, val_texts)
@@ -156,15 +160,18 @@ def batch_train_sequence_model(data,
             validation_steps=validation_steps,
             callbacks=callbacks,
             epochs=epochs,
-            verbose=2)  # Logs once per epoch.
+            verbose=1)  # 0 = silent; 1 = progress bar; 2 = logs once per epoch
 
     # Print results.
     history = history.history
     print('Validation accuracy: {acc}, loss: {loss}'.format(
             acc=history['val_acc'][-1], loss=history['val_loss'][-1]))
 
-    # Save model.
-    model.save('amazon_reviews_sepcnn_model.h5')
+    # Save entire model to a HDF5 file (contains the weight values
+    # and the model's configuration)
+    # For more info on saving & restoring a model, see
+    # https://www.tensorflow.org/tutorials/keras/save_and_restore_models#save_the_entire_model 
+    model.save('sentiment140_sepcnn_model.h5')
     return history['val_acc'][-1], history['val_loss'][-1]
 
 
@@ -173,9 +180,25 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default='./data',
                         help='input data directory')
     FLAGS, unparsed = parser.parse_known_args()
+    
+    scriptStart = datetime.now()
+    print('Script started at ', scriptStart)
 
-    # Using the Amazon reviews dataset to demonstrate training of
-    # sequence model with batches of data.
-    data = load_data.load_amazon_reviews_sentiment_analysis_dataset(
-            FLAGS.data_dir)
+    ''' Original dataset used in Google code:
+	# Using the Amazon reviews dataset to demonstrate training of
+	# sequence model with batches of data.
+	data = load_data.load_amazon_reviews_sentiment_analysis_dataset(
+			FLAGS.data_dir)
+	'''
+
+    # Use the Kaggle Sentiment140 dataset to train a sequence model with batches of data
+    data = load_data.load_sentiment140_dataset(FLAGS.data_dir)
     batch_train_sequence_model(data)
+    
+    scriptEnd = datetime.now()
+    print('Script ended at', scriptEnd)
+    elapsedTime = scriptEnd - scriptStart
+    seconds = elapsedTime.total_seconds()
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    print('Total elapsed time:', hours, 'h', minutes, 'm', seconds, 's')

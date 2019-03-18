@@ -165,9 +165,19 @@ def load_amazon_reviews_sentiment_analysis_dataset(data_path, seed=123):
     columns = (0, 1, 2)  # 0 - label, 1 - title, 2 - body.
     train_data = _load_and_shuffle_data(
             data_path, 'train.csv', columns, seed, header=None)
+    train_data[1] = train_data[1].str.replace('\\n', '\n').str.replace('\\"', '"')
+    train_data[2] = train_data[2].str.replace('\\n', '\n').str.replace('\\"', '"')
+    train_data['final'] = train_data[1].astype(str) + ', ' + train_data[2]
+    train_texts = train_data['final'].values
+    train_data.drop(columns=['final'])
 
     test_data_path = os.path.join(data_path, 'test.csv')
     test_data = pd.read_csv(test_data_path, usecols=columns, header=None)
+    test_data[1] = test_data[1].str.replace('\\n', '\n').str.replace('\\"', '"')
+    test_data[2] = test_data[2].str.replace('\\n', '\n').str.replace('\\"', '"')
+    test_data['final'] = test_data[1].astype(str) + ', ' + test_data[2]
+    test_texts = test_data['final'].values
+    test_data.drop(columns=['final'])
 
     # Get train and test labels. Replace label value 5 with value 0.
     train_labels = np.array(train_data.iloc[:, 0])
@@ -175,6 +185,7 @@ def load_amazon_reviews_sentiment_analysis_dataset(data_path, seed=123):
     test_labels = np.array(test_data.iloc[:, 0])
     test_labels[test_labels == 5] = 0
 
+    '''
     # Get train and test texts.
     train_texts = []
     for index, row in train_data.iterrows():
@@ -182,6 +193,7 @@ def load_amazon_reviews_sentiment_analysis_dataset(data_path, seed=123):
     test_texts = []
     for index, row in test_data.iterrows():
         test_texts.append(_get_amazon_review_text(row))
+	'''
 
     return ((train_texts, train_labels), (test_texts, test_labels))
 
@@ -209,7 +221,8 @@ def _load_and_shuffle_data(data_path,
                            cols,
                            seed,
                            separator=',',
-                           header=0):
+                           header=0,
+                           encoding='utf-8'):
     """Loads and shuffles the dataset using pandas.
 
     # Arguments
@@ -222,7 +235,7 @@ def _load_and_shuffle_data(data_path,
     """
     np.random.seed(seed)
     data_path = os.path.join(data_path, file_name)
-    data = pd.read_csv(data_path, usecols=cols, sep=separator, header=header)
+    data = pd.read_csv(data_path, usecols=cols, sep=separator, header=header, encoding=encoding)
     return data.reindex(np.random.permutation(data.index))
 
 
@@ -240,3 +253,43 @@ def _split_training_and_validation_sets(texts, labels, validation_split):
     num_training_samples = int((1 - validation_split) * len(texts))
     return ((texts[:num_training_samples], labels[:num_training_samples]),
             (texts[num_training_samples:], labels[num_training_samples:]))
+
+
+def load_sentiment140_dataset(data_path, seed=123):
+    """Loads the Kaggle Sentiment140 dataset.
+
+    # Arguments
+        data_path: string, path to the data directory.
+        seed: int, seed for randomizer.
+
+    # Returns
+        A tuple of training and validation data.
+        Number of training samples: 1,600,000
+        Number of test samples: 359 (after discarding records labelled as having "neutral" sentiment)
+		Number of categories: 2 (0 - negative, 1 - positive)
+
+    # References
+    	Download and uncompress archive from:
+			http://cs.stanford.edu/people/alecmgo/trainingandtestdata.zip
+    """
+    columns = (0, 5)  # 0 - sentiment label, 5 - tweet text
+    train_data = _load_and_shuffle_data(
+            data_path, 'training.1600000.processed.noemoticon.csv', columns, seed, header=None, encoding='latin-1')
+    print('train_data.shape:', train_data.shape)
+    train_texts = train_data.iloc[:, 1:].values.tolist()
+
+    test_data_path = os.path.join(data_path, 'testdata.manual.2009.06.14.csv')
+    test_data = pd.read_csv(test_data_path, usecols=columns, header=None, encoding='latin-1')
+    print('test_data.shape:', test_data.shape)
+    # Drop rows with neutral sentiment (value of 2) since the training data doesn't contain neutral records
+    test_data = test_data[test_data[0] != 2]
+    print('test_data.shape after removing neutral records:', test_data.shape)
+    test_texts = test_data.iloc[:, 1:].values.tolist()
+
+    # Get train and test labels. Replace label value 4 with value 1.
+    train_labels = np.array(train_data.iloc[:, 0])
+    train_labels[train_labels == 4] = 1
+    test_labels = np.array(test_data.iloc[:, 0])
+    test_labels[test_labels == 4] = 1
+
+    return ((train_texts, train_labels), (test_texts, test_labels))
